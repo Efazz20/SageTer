@@ -1,7 +1,5 @@
 #!/bin/bash
-# SageTer - SSH into SageMaker Studio Lab from Android using Tailscale (no sudo required)
-
-set -e
+# SageTer - Connect SageMaker Studio Lab to Tailscale (No Sudo Required)
 
 AUTH_KEY="$1"
 if [ -z "$AUTH_KEY" ]; then
@@ -10,21 +8,36 @@ if [ -z "$AUTH_KEY" ]; then
     exit 1
 fi
 
-# Install Tailscale user-wide
-echo ">>> Installing Tailscale..."
-curl -fsSL https://tailscale.com/install.sh | sh -s -- --user
+# Create a working directory
+mkdir -p ~/tailscale && cd ~/tailscale
 
-# Add ~/.local/bin to PATH for this session
-export PATH="$HOME/.local/bin:$PATH"
+# Download static binaries (no sudo required)
+echo ">>> Downloading Tailscale static binaries..."
+wget -q https://pkgs.tailscale.com/stable/tailscale_1.84.0_amd64.tgz
+tar -xzf tailscale_1.84.0_amd64.tgz
+mv tailscale_1.84.0_amd64/* . && rm -r tailscale_1.84.0_amd64*
 
-# Start Tailscale with SSH
-echo ">>> Connecting to your Tailnet..."
-~/.local/bin/tailscale up --ssh --auth-key="$AUTH_KEY"
+# Start tailscaled daemon in userspace mode (no root)
+echo ">>> Starting tailscaled daemon..."
+./tailscaled --tun=userspace-networking --socket=/tmp/tailscaled.sock &
+
+# Give it a moment to initialize
+sleep 2
+
+# Authenticate and connect to your tailnet
+echo ">>> Connecting to your tailnet..."
+./tailscale --socket=/tmp/tailscaled.sock up --auth-key="$AUTH_KEY"
+
+# Get the assigned Tailscale IP
+tailscale_ip=$(./tailscale --socket=/tmp/tailscaled.sock ip -4)
 
 echo "✅ Success! Your VM is now on your Tailnet."
-echo "   Tailscale IP: $(~/.local/bin/tailscale ip -4)"
+echo "   Tailscale IP: $tailscale_ip"
 echo ""
 echo "🔑 In Termius, create a new host with:"
-echo "   Address: $(~/.local/bin/tailscale ip -4)"
+echo "   Address: $tailscale_ip"
 echo "   Username: $(whoami)"
 echo "   Port: 22"
+echo ""
+echo "⚠️  Note: Keep this terminal session open to maintain the connection."
+echo "   To run in background, consider using 'screen' or 'tmux'."

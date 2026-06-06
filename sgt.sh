@@ -1,32 +1,30 @@
 #!/bin/bash
-# setup-tailscale.sh - Connects SageMaker Studio Lab to your Tailscale tailnet
-# Usage: bash setup-tailscale.sh YOUR_AUTH_KEY
+# SageTer - SSH into SageMaker Studio Lab from Android using Tailscale (no sudo required)
 
 set -e
 
 AUTH_KEY="$1"
 if [ -z "$AUTH_KEY" ]; then
-    echo "❌ Usage: $0 YOUR_TAILSCALE_AUTH_KEY"
+    echo "❌ Error: Please provide your Tailscale auth key."
+    echo "Usage: $0 YOUR_AUTH_KEY"
     exit 1
 fi
 
-# Install SSH server if missing
-if ! pgrep -f "sshd" > /dev/null; then
-    echo ">>> Setting up SSH server..."
-    sudo apt-get update -qq
-    sudo apt-get install -y -qq openssh-server
-    sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-    sudo systemctl restart ssh
-fi
+# Install Tailscale user-wide
+echo ">>> Installing Tailscale..."
+curl -fsSL https://tailscale.com/install.sh | sh -s -- --user
 
-# Install Tailscale if missing
-if ! command -v tailscale &> /dev/null; then
-    echo ">>> Installing Tailscale..."
-    curl -fsSL https://tailscale.com/install.sh | sh
-fi
+# Add ~/.local/bin to PATH for this session
+export PATH="$HOME/.local/bin:$PATH"
 
-# Connect to tailnet
+# Start Tailscale with SSH
 echo ">>> Connecting to your Tailnet..."
-sudo tailscale up --ssh --auth-key "$AUTH_KEY"
+~/.local/bin/tailscale up --ssh --auth-key="$AUTH_KEY"
 
-echo "✅ Connected! Tailscale IP: $(tailscale ip -4)"
+echo "✅ Success! Your VM is now on your Tailnet."
+echo "   Tailscale IP: $(~/.local/bin/tailscale ip -4)"
+echo ""
+echo "🔑 In Termius, create a new host with:"
+echo "   Address: $(~/.local/bin/tailscale ip -4)"
+echo "   Username: $(whoami)"
+echo "   Port: 22"
